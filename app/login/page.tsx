@@ -14,34 +14,48 @@ export default function LoginPage() {
   const { login, signup, googleLogin, loading } = useAuth()
   const [activeTab, setActiveTab] = useState("login")
   const [error, setError] = useState<string | null>(null)
+  // Add a loading state indicator
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   const handleLogin = async (email: string, password: string) => {
     try {
       setError(null)
+      setIsLoggingIn(true)
       await login(email, password)
       router.push("/")
     } catch (err: any) {
+      console.error("Login error:", err)
       setError(err.message || "Failed to login. Please check your credentials.")
+    } finally {
+      setIsLoggingIn(false)
     }
   }
 
   const handleSignup = async (email: string, password: string) => {
     try {
       setError(null)
+      setIsLoggingIn(true)
       await signup(email, password)
       router.push("/")
     } catch (err: any) {
+      console.error("Signup error:", err)
       setError(err.message || "Failed to create account. Please try again.")
+    } finally {
+      setIsLoggingIn(false)
     }
   }
 
   const handleGoogleLogin = async () => {
     try {
       setError(null)
+      setIsLoggingIn(true)
       await googleLogin()
       router.push("/")
     } catch (err: any) {
+      console.error("Google login error:", err)
       setError(err.message || "Failed to login with Google. Please try again.")
+    } finally {
+      setIsLoggingIn(false)
     }
   }
 

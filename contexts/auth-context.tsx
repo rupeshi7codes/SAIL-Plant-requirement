@@ -12,6 +12,9 @@ import {
 } from "firebase/auth"
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
+// Add import for data validator
+import { validateUserData } from "@/lib/data-validator"
+import { debugLog } from "@/lib/debug-logger"
 
 interface User {
   uid: string
@@ -76,25 +79,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // Fetch user data from Firestore
+  // Update the fetchUserData function to use validation
   const fetchUserData = async (uid: string) => {
     try {
+      debugLog("Fetching user data for:", uid)
       const userDocRef = doc(db, "users", uid)
       const userDocSnap = await getDoc(userDocRef)
 
       if (userDocSnap.exists()) {
-        const data = userDocSnap.data() as UserData
-        setUserData(data)
+        const rawData = userDocSnap.data()
+        debugLog("Raw data from Firestore:", rawData)
+
+        // Validate and fix data structure if needed
+        const validatedData = validateUserData(rawData)
+        setUserData(validatedData)
+
+        debugLog("User data set after validation:", validatedData)
       } else {
+        debugLog("No user document found, creating new one")
         // Create a new document for the user if it doesn't exist
-        await setDoc(userDocRef, {
-          ...defaultUserData,
+        const newUserData = {
+          requirements: [],
+          pos: [],
+          supplyHistory: [],
           createdAt: serverTimestamp(),
           lastUpdated: serverTimestamp(),
-        })
+        }
+
+        await setDoc(userDocRef, newUserData)
         setUserData(defaultUserData)
       }
     } catch (error) {
       console.error("Error fetching user data:", error)
+      debugLog("Error in fetchUserData:", error)
+      // Set default data on error to prevent undefined errors
+      setUserData(defaultUserData)
     }
   }
 
@@ -181,10 +200,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserData(updatedData)
 
       const userDocRef = doc(db, "users", user.uid)
-      await updateDoc(userDocRef, {
-        ...newData,
-        lastUpdated: serverTimestamp(),
-      })
+
+      // Check if document exists first
+      const docSnap = await getDoc(userDocRef)
+
+      if (docSnap.exists()) {
+        // Update existing document
+        await updateDoc(userDocRef, {
+          ...newData,
+          lastUpdated: serverTimestamp(),
+        })
+      } else {
+        // Create new document with all data
+        await setDoc(userDocRef, {
+          ...updatedData,
+          createdAt: serverTimestamp(),
+          lastUpdated: serverTimestamp(),
+        })
+      }
     } catch (error) {
       console.error("Error updating user data:", error)
       throw error

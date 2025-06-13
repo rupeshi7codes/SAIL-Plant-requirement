@@ -29,6 +29,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
+// Add import for debug logger
+import { debugLog } from "@/lib/debug-logger"
+
 export default function SRUApp() {
   const router = useRouter()
   const { user, userData, logout, updateUserData, loading } = useAuth()
@@ -50,8 +53,11 @@ export default function SRUApp() {
   }, [user, loading, router])
 
   // Auto-update priority based on delivery dates
+  // Update the useEffect that depends on userData.requirements
   useEffect(() => {
     if (!userData.requirements?.length) return
+
+    debugLog("Current user data:", userData)
 
     const updateUrgentRequirements = () => {
       const updatedRequirements = userData.requirements.map((req: any) => {
@@ -70,7 +76,9 @@ export default function SRUApp() {
       )
 
       if (hasChanges) {
-        updateUserData({ requirements: updatedRequirements })
+        updateUserData({ requirements: updatedRequirements }).catch((error) => {
+          console.error("Failed to update urgent requirements:", error)
+        })
       }
     }
 
@@ -79,7 +87,7 @@ export default function SRUApp() {
     const interval = setInterval(updateUrgentRequirements, 60 * 60 * 1000) // 1 hour
 
     return () => clearInterval(interval)
-  }, [userData.requirements, updateUserData])
+  }, [userData]) // Updated dependency array to use userData instead of userData.requirements
 
   if (loading) {
     return (
@@ -141,18 +149,29 @@ export default function SRUApp() {
     setShowSupplyDetailsModal(true)
   }
 
-  const handleAddPO = (newPO: any) => {
-    const po = {
-      ...newPO,
-      id: `PO-${String(pos.length + 1).padStart(3, "0")}`,
-      createdDate: new Date().toISOString().split("T")[0],
-      items: newPO.items.map((item: any) => ({
-        ...item,
-        balanceQty: item.quantity,
-      })),
+  // Update the handleAddPO function to ensure proper data structure
+  const handleAddPO = async (newPO: any) => {
+    try {
+      const po = {
+        ...newPO,
+        id: `PO-${String(pos.length + 1).padStart(3, "0")}`,
+        createdDate: new Date().toISOString().split("T")[0],
+        items: newPO.items.map((item: any) => ({
+          ...item,
+          balanceQty: item.quantity,
+        })),
+      }
+
+      debugLog("Adding new PO:", po)
+
+      // Make a copy of the current POs array to avoid reference issues
+      const updatedPOs = [...pos, po]
+      await updateUserData({ pos: updatedPOs })
+      setShowPOForm(false)
+    } catch (error) {
+      console.error("Failed to add PO:", error)
+      alert("Failed to add Purchase Order. Please try again.")
     }
-    updateUserData({ pos: [...pos, po] })
-    setShowPOForm(false)
   }
 
   const handleEditPO = (po: any) => {
