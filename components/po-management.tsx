@@ -70,34 +70,21 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
     }
   }
 
-  // Check if the pdfFile is a File object or metadata
-  const hasPdfFile = (po: any) => {
-    return po.pdfFile || (po._fileMetadata && po._fileMetadata.name)
+  // Check if the PO has a file attached
+  const hasFile = (po: any) => {
+    return po.fileUrl || po.fileName
   }
 
-  // Get file name from either File object or metadata
+  // Get file name from PO
   const getFileName = (po: any) => {
-    if (po.pdfFile && po.pdfFile.name) {
-      return po.pdfFile.name
-    }
-    if (po._fileMetadata && po._fileMetadata.name) {
-      return po._fileMetadata.name
-    }
-    return "PO Document"
+    return po.fileName || "PO Document"
   }
 
-  const handleFileDownload = (pdfFile: File) => {
-    if (pdfFile && pdfFile instanceof File) {
-      const url = URL.createObjectURL(pdfFile)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = pdfFile.name
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+  const handleFileDownload = (po: any) => {
+    if (po.fileUrl) {
+      window.open(po.fileUrl, "_blank")
     } else {
-      alert("PDF file is not available for download. It may need to be re-uploaded.")
+      alert("PDF file is not available for download.")
     }
   }
 
@@ -170,17 +157,13 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
                           <p className="text-sm text-gray-600">{po.areaOfApplication}</p>
                           <div className="flex items-center gap-4 mt-2">
                             <span className="text-sm text-gray-600">{po.items.length} items</span>
-                            {hasPdfFile(po) && (
+                            {hasFile(po) && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  if (po.pdfFile instanceof File) {
-                                    handleFileDownload(po.pdfFile)
-                                  } else {
-                                    alert("PDF file is not available for download. It may need to be re-uploaded.")
-                                  }
+                                  handleFileDownload(po)
                                 }}
                                 className="flex items-center gap-2 h-7"
                               >

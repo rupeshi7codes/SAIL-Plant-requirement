@@ -1,9 +1,9 @@
 import { initializeApp } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
+import { getStorage } from "firebase/storage"
 
 // Your Firebase configuration
-// Replace these with your actual Firebase project config
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -21,5 +21,8 @@ export const auth = getAuth(app)
 
 // Initialize Cloud Firestore and get a reference to the service
 export const db = getFirestore(app)
+
+// Initialize Firebase Storage and get a reference to the service
+export const storage = getStorage(app)
 
 export default app

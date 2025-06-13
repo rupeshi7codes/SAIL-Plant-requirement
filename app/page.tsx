@@ -44,6 +44,7 @@ export default function SRUApp() {
   const [activeTab, setActiveTab] = useState("dashboard")
   const [showSupplyDetailsModal, setShowSupplyDetailsModal] = useState(false)
   const [selectedRequirementForSupply, setSelectedRequirementForSupply] = useState<any>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -53,7 +54,6 @@ export default function SRUApp() {
   }, [user, loading, router])
 
   // Auto-update priority based on delivery dates
-  // Update the useEffect that depends on userData.requirements
   useEffect(() => {
     if (!userData.requirements?.length) return
 
@@ -87,7 +87,7 @@ export default function SRUApp() {
     const interval = setInterval(updateUrgentRequirements, 60 * 60 * 1000) // 1 hour
 
     return () => clearInterval(interval)
-  }, [userData]) // Updated dependency array to use userData instead of userData.requirements
+  }, [userData, updateUserData])
 
   if (loading) {
     return (
@@ -149,12 +149,15 @@ export default function SRUApp() {
     setShowSupplyDetailsModal(true)
   }
 
-  // Update the handleAddPO function to ensure proper data structure
   const handleAddPO = async (newPO: any) => {
     try {
+      setIsProcessing(true)
+
+      const poId = `PO-${String(pos.length + 1).padStart(3, "0")}`
+
       const po = {
         ...newPO,
-        id: `PO-${String(pos.length + 1).padStart(3, "0")}`,
+        id: poId,
         createdDate: new Date().toISOString().split("T")[0],
         items: newPO.items.map((item: any) => ({
           ...item,
@@ -171,6 +174,8 @@ export default function SRUApp() {
     } catch (error) {
       console.error("Failed to add PO:", error)
       alert("Failed to add Purchase Order. Please try again.")
+    } finally {
+      setIsProcessing(false)
     }
   }
 
@@ -179,16 +184,39 @@ export default function SRUApp() {
     setShowEditPOForm(true)
   }
 
-  const handleUpdatePO = (updatedPO: any) => {
-    const updatedPOs = pos.map((po) => (po.id === updatedPO.id ? updatedPO : po))
-    updateUserData({ pos: updatedPOs })
-    setShowEditPOForm(false)
-    setEditingPO(null)
+  const handleUpdatePO = async (updatedPO: any) => {
+    try {
+      setIsProcessing(true)
+      const updatedPOs = pos.map((po) => (po.id === updatedPO.id ? updatedPO : po))
+      await updateUserData({ pos: updatedPOs })
+      setShowEditPOForm(false)
+      setEditingPO(null)
+    } catch (error) {
+      console.error("Failed to update PO:", error)
+      alert("Failed to update Purchase Order. Please try again.")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
-  const handleDeletePO = (poId: string) => {
-    const updatedPOs = pos.filter((po) => po.id !== poId)
-    updateUserData({ pos: updatedPOs })
+  const handleDeletePO = async (poId: string) => {
+    try {
+      setIsProcessing(true)
+      const poToDelete = pos.find((po) => po.id === poId)
+
+      // Delete the file from storage if it exists
+      if (poToDelete && poToDelete.filePath) {
+        // We'll handle file deletion in the updateUserData function
+      }
+
+      const updatedPOs = pos.filter((po) => po.id !== poId)
+      await updateUserData({ pos: updatedPOs })
+    } catch (error) {
+      console.error("Failed to delete PO:", error)
+      alert("Failed to delete Purchase Order. Please try again.")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const handleUpdatePOBalance = (poId: string, materialName: string, newBalance: number) => {
@@ -355,11 +383,16 @@ export default function SRUApp() {
             </div>
             <div className="flex items-center gap-4">
               <div className="flex gap-3">
-                <Button onClick={() => setShowPOForm(true)} variant="outline" className="flex items-center gap-2">
+                <Button
+                  onClick={() => setShowPOForm(true)}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  disabled={isProcessing}
+                >
                   <Plus className="h-4 w-4" />
                   New PO
                 </Button>
-                <Button onClick={() => setShowForm(true)} className="flex items-center gap-2">
+                <Button onClick={() => setShowForm(true)} className="flex items-center gap-2" disabled={isProcessing}>
                   <Plus className="h-4 w-4" />
                   New Requirement
                 </Button>
@@ -377,6 +410,7 @@ export default function SRUApp() {
                       variant="destructive"
                       size="sm"
                       className="flex items-center gap-2 bg-red-600 hover:bg-red-700"
+                      disabled={isProcessing}
                     >
                       <LogOut className="h-4 w-4" />
                       Logout

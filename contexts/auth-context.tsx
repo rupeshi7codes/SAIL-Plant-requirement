@@ -14,6 +14,7 @@ import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "firebase/firest
 import { auth, db } from "@/lib/firebase"
 import { validateUserData } from "@/lib/data-validator"
 import { debugLog } from "@/lib/debug-logger"
+import { uploadFile, deleteFile } from "@/lib/file-storage"
 
 interface User {
   uid: string
@@ -56,20 +57,13 @@ const removeFileObjects = (data: any): any => {
 
   if (typeof data === "object" && data !== null) {
     if (data instanceof File) {
-      // Return a placeholder for File objects
-      return {
-        _fileMetadata: {
-          name: data.name,
-          type: data.type,
-          size: data.size,
-          lastModified: data.lastModified,
-        },
-      }
+      // Return null for File objects - we'll handle them separately
+      return null
     }
 
     const result: Record<string, any> = {}
     for (const key in data) {
-      if (Object.prototype.hasOwnProperty.call(data, key)) {
+      if (Object.prototype.hasOwnProperty.call(data, key) && key !== "pdfFile") {
         result[key] = removeFileObjects(data[key])
       }
     }
@@ -123,27 +117,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Validate and fix data structure if needed
         const validatedData = validateUserData(rawData)
-
-        // Restore File objects from local storage if available
-        const localPOFiles = JSON.parse(localStorage.getItem(`poFiles_${uid}`) || "{}")
-
-        if (validatedData.pos && validatedData.pos.length > 0) {
-          validatedData.pos = validatedData.pos.map((po: any) => {
-            if (po._fileMetadata && localPOFiles[po.id]) {
-              // Try to restore the file from local storage
-              try {
-                const fileData = localPOFiles[po.id]
-                // We can't recreate the actual File object, but we can store the metadata
-                po.pdfFile = fileData
-              } catch (e) {
-                console.error("Failed to restore file from local storage", e)
-              }
-            }
-            return po
-          })
-        }
-
         setUserData(validatedData)
+
         debugLog("User data set after validation:", validatedData)
       } else {
         debugLog("No user document found, creating new one")
@@ -246,28 +221,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return
 
     try {
+      // Handle file uploads for POs
+      if (newData.pos) {
+        const updatedPOs = [...newData.pos]
+
+        for (let i = 0; i < updatedPOs.length; i++) {
+          const po = updatedPOs[i]
+
+          // If this PO has a new file to upload
+          if (po.pdfFile instanceof File) {
+            // Delete the old file if it exists
+            if (po.filePath) {
+              try {
+                await deleteFile(po.filePath)
+              } catch (error) {
+                console.error("Error deleting old file:", error)
+              }
+            }
+
+            // Upload the new file
+            const filePath = `users/${user.uid}/pos/${po.id}/${po.pdfFile.name}`
+            const { url, path } = await uploadFile(po.pdfFile, filePath)
+
+            // Update the PO with the file info
+            updatedPOs[i] = {
+              ...po,
+              fileUrl: url,
+              filePath: path,
+              fileName: po.pdfFile.name,
+              pdfFile: null, // Remove the File object
+            }
+          }
+        }
+
+        // Update newData with the updated POs
+        newData.pos = updatedPOs
+      }
+
       // Update local state first
       const updatedData = { ...userData, ...newData }
       setUserData(updatedData)
-
-      // Store PDF files in local storage
-      if (newData.pos) {
-        const localPOFiles: Record<string, any> = JSON.parse(localStorage.getItem(`poFiles_${user.uid}`) || "{}")
-
-        newData.pos.forEach((po: any) => {
-          if (po.pdfFile instanceof File) {
-            // Store file metadata in local storage
-            localPOFiles[po.id] = {
-              name: po.pdfFile.name,
-              type: po.pdfFile.type,
-              size: po.pdfFile.size,
-              lastModified: po.pdfFile.lastModified,
-            }
-          }
-        })
-
-        localStorage.setItem(`poFiles_${user.uid}`, JSON.stringify(localPOFiles))
-      }
 
       // Remove File objects before saving to Firestore
       const cleanData = removeFileObjects(newData)

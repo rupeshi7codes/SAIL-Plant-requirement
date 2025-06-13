@@ -24,23 +24,33 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
   })
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const validItems = formData.items.filter((item) => item.materialName && item.quantity)
-    if (validItems.length === 0) {
-      alert("Please add at least one item with material name and quantity")
-      return
-    }
+    setIsSubmitting(true)
 
-    onSubmit({
-      ...formData,
-      items: validItems.map((item) => ({
-        ...item,
-        quantity: Number.parseInt(item.quantity),
-      })),
-      pdfFile: pdfFile,
-    })
+    try {
+      const validItems = formData.items.filter((item) => item.materialName && item.quantity)
+      if (validItems.length === 0) {
+        alert("Please add at least one item with material name and quantity")
+        setIsSubmitting(false)
+        return
+      }
+
+      onSubmit({
+        ...formData,
+        items: validItems.map((item) => ({
+          ...item,
+          quantity: Number.parseInt(item.quantity),
+        })),
+        pdfFile: pdfFile,
+      })
+    } catch (error) {
+      console.error("Error submitting form:", error)
+      alert("An error occurred while creating the PO. Please try again.")
+      setIsSubmitting(false)
+    }
   }
 
   const addItem = () => {
@@ -101,7 +111,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
             <CardTitle>Create New Purchase Order</CardTitle>
             <CardDescription>Add a new PO with multiple material items</CardDescription>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose} disabled={isSubmitting}>
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
@@ -116,6 +126,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                   onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
                   placeholder="PO-2024-XXX"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -127,6 +138,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                   value={formData.poDate}
                   onChange={(e) => setFormData({ ...formData, poDate: e.target.value })}
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -138,6 +150,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                   onChange={(e) => setFormData({ ...formData, areaOfApplication: e.target.value })}
                   placeholder="e.g., Blast Furnace - Hearth Lining"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -155,6 +168,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                         variant="outline"
                         onClick={() => fileInputRef.current?.click()}
                         className="flex items-center gap-2"
+                        disabled={isSubmitting}
                       >
                         <Upload className="h-4 w-4" />
                         Upload PO PDF
@@ -165,6 +179,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                         accept=".pdf"
                         onChange={handleFileUpload}
                         className="hidden"
+                        disabled={isSubmitting}
                       />
                     </div>
                     <p className="mt-2 text-sm text-gray-600">Upload the original PO document (PDF only)</p>
@@ -179,10 +194,22 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={handleFileDownload}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleFileDownload}
+                        disabled={isSubmitting}
+                      >
                         <Download className="h-4 w-4" />
                       </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={handleFileRemove}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleFileRemove}
+                        disabled={isSubmitting}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -194,7 +221,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-lg font-medium">PO Items</Label>
-                <Button type="button" onClick={addItem} variant="outline" size="sm">
+                <Button type="button" onClick={addItem} variant="outline" size="sm" disabled={isSubmitting}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Item
                 </Button>
@@ -211,6 +238,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                           onChange={(e) => updateItem(index, "materialName", e.target.value)}
                           placeholder="Enter custom material name"
                           required
+                          disabled={isSubmitting}
                         />
                       </div>
 
@@ -222,12 +250,17 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                           onChange={(e) => updateItem(index, "quantity", e.target.value)}
                           placeholder="Enter quantity"
                           required
+                          disabled={isSubmitting}
                         />
                       </div>
 
                       <div className="space-y-2">
                         <Label>Unit *</Label>
-                        <Select value={item.unit} onValueChange={(value) => updateItem(index, "unit", value)}>
+                        <Select
+                          value={item.unit}
+                          onValueChange={(value) => updateItem(index, "unit", value)}
+                          disabled={isSubmitting}
+                        >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -249,6 +282,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                             size="sm"
                             onClick={() => removeItem(index)}
                             className="text-red-600 hover:text-red-700"
+                            disabled={isSubmitting}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -261,10 +295,19 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
             </div>
 
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={onClose}>
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button type="submit">Create PO</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Creating...
+                  </div>
+                ) : (
+                  "Create PO"
+                )}
+              </Button>
             </div>
           </form>
         </CardContent>
