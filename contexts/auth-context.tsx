@@ -2,9 +2,20 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "firebase/auth"
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase"
 
 interface User {
-  email: string
+  uid: string
+  email: string | null
   name: string
 }
 
@@ -17,97 +28,184 @@ interface UserData {
 interface AuthContextType {
   user: User | null
   userData: UserData
-  login: (email: string) => void
-  logout: () => void
-  updateUserData: (data: Partial<UserData>) => void
+  loading: boolean
+  login: (email: string, password: string) => Promise<void>
+  googleLogin: () => Promise<void>
+  signup: (email: string, password: string) => Promise<void>
+  logout: () => Promise<void>
+  updateUserData: (data: Partial<UserData>) => Promise<void>
+}
+
+const defaultUserData: UserData = {
+  requirements: [],
+  pos: [],
+  supplyHistory: [],
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [userData, setUserData] = useState<UserData>({
-    requirements: [],
-    pos: [],
-    supplyHistory: [],
-  })
+  const [userData, setUserData] = useState<UserData>(defaultUserData)
+  const [loading, setLoading] = useState(true)
 
-  // Load user data on mount
+  // Listen for auth state changes
   useEffect(() => {
-    const savedUser = localStorage.getItem("currentUser")
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser)
-      setUser(parsedUser)
-      // Check if user data exists and load it, otherwise initialize with empty data
-      const userDataKey = `userData_${parsedUser.email}`
-      const savedData = localStorage.getItem(userDataKey)
-      if (savedData) {
-        const parsedData = JSON.parse(savedData)
-        setUserData(parsedData)
-      } else {
-        // Initialize with default data for new users
-        const defaultData = {
-          requirements: [],
-          pos: [],
-          supplyHistory: [],
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // User is signed in
+        const userProfile: User = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
         }
-        setUserData(defaultData)
-        localStorage.setItem(userDataKey, JSON.stringify(defaultData))
+        setUser(userProfile)
+
+        // Fetch user data from Firestore
+        await fetchUserData(firebaseUser.uid)
+      } else {
+        // User is signed out
+        setUser(null)
+        setUserData(defaultUserData)
       }
-    }
+      setLoading(false)
+    })
+
+    // Cleanup subscription
+    return () => unsubscribe()
   }, [])
 
-  const login = (email: string) => {
-    const name = email.split("@")[0]
-    const userObj = {
-      email,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-    }
-    setUser(userObj)
-    localStorage.setItem("currentUser", JSON.stringify(userObj))
-    localStorage.setItem("isLoggedIn", "true")
+  // Fetch user data from Firestore
+  const fetchUserData = async (uid: string) => {
+    try {
+      const userDocRef = doc(db, "users", uid)
+      const userDocSnap = await getDoc(userDocRef)
 
-    // Check if user data exists and load it, otherwise initialize with empty data
-    const userDataKey = `userData_${email}`
-    const savedData = localStorage.getItem(userDataKey)
-    if (savedData) {
-      const parsedData = JSON.parse(savedData)
-      setUserData(parsedData)
-    } else {
-      // Initialize with default data for new users
-      const defaultData = {
-        requirements: [],
-        pos: [],
-        supplyHistory: [],
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data() as UserData
+        setUserData(data)
+      } else {
+        // Create a new document for the user if it doesn't exist
+        await setDoc(userDocRef, {
+          ...defaultUserData,
+          createdAt: serverTimestamp(),
+          lastUpdated: serverTimestamp(),
+        })
+        setUserData(defaultUserData)
       }
-      setUserData(defaultData)
-      localStorage.setItem(userDataKey, JSON.stringify(defaultData))
+    } catch (error) {
+      console.error("Error fetching user data:", error)
     }
   }
 
-  const logout = () => {
-    if (user) {
-      // Always save current data before logging out
-      const userDataKey = `userData_${user.email}`
-      localStorage.setItem(userDataKey, JSON.stringify(userData))
+  // Sign up with email and password
+  const signup = async (email: string, password: string) => {
+    try {
+      setLoading(true)
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      const firebaseUser = userCredential.user
+
+      // Create user document in Firestore
+      const userDocRef = doc(db, "users", firebaseUser.uid)
+      await setDoc(userDocRef, {
+        ...defaultUserData,
+        email: firebaseUser.email,
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+      })
+    } catch (error) {
+      console.error("Error signing up:", error)
+      throw error
+    } finally {
+      setLoading(false)
     }
-    setUser(null)
-    setUserData({ requirements: [], pos: [], supplyHistory: [] })
-    localStorage.removeItem("currentUser")
-    localStorage.removeItem("isLoggedIn")
   }
 
-  const updateUserData = (newData: Partial<UserData>) => {
-    const updatedData = { ...userData, ...newData }
-    setUserData(updatedData)
-    if (user) {
-      const userDataKey = `userData_${user.email}`
-      localStorage.setItem(userDataKey, JSON.stringify(updatedData))
+  // Sign in with email and password
+  const login = async (email: string, password: string) => {
+    try {
+      setLoading(true)
+      await signInWithEmailAndPassword(auth, email, password)
+    } catch (error) {
+      console.error("Error signing in:", error)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Sign in with Google
+  const googleLogin = async () => {
+    try {
+      setLoading(true)
+      const provider = new GoogleAuthProvider()
+      const userCredential = await signInWithPopup(auth, provider)
+      const firebaseUser = userCredential.user
+
+      // Check if user document exists, create if not
+      const userDocRef = doc(db, "users", firebaseUser.uid)
+      const userDocSnap = await getDoc(userDocRef)
+
+      if (!userDocSnap.exists()) {
+        await setDoc(userDocRef, {
+          ...defaultUserData,
+          email: firebaseUser.email,
+          createdAt: serverTimestamp(),
+          lastUpdated: serverTimestamp(),
+        })
+      }
+    } catch (error) {
+      console.error("Error signing in with Google:", error)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Sign out
+  const logout = async () => {
+    try {
+      await signOut(auth)
+    } catch (error) {
+      console.error("Error signing out:", error)
+      throw error
+    }
+  }
+
+  // Update user data in Firestore
+  const updateUserData = async (newData: Partial<UserData>) => {
+    if (!user) return
+
+    try {
+      const updatedData = { ...userData, ...newData }
+      setUserData(updatedData)
+
+      const userDocRef = doc(db, "users", user.uid)
+      await updateDoc(userDocRef, {
+        ...newData,
+        lastUpdated: serverTimestamp(),
+      })
+    } catch (error) {
+      console.error("Error updating user data:", error)
+      throw error
     }
   }
 
   return (
-    <AuthContext.Provider value={{ user, userData, login, logout, updateUserData }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{
+        user,
+        userData,
+        loading,
+        login,
+        googleLogin,
+        signup,
+        logout,
+        updateUserData,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
   )
 }
 

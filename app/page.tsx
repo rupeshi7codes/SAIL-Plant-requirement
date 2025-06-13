@@ -31,7 +31,7 @@ import {
 
 export default function SRUApp() {
   const router = useRouter()
-  const { user, userData, logout, updateUserData, login } = useAuth()
+  const { user, userData, logout, updateUserData, loading } = useAuth()
   const [showForm, setShowForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
   const [editingRequirement, setEditingRequirement] = useState<any>(null)
@@ -42,27 +42,17 @@ export default function SRUApp() {
   const [showSupplyDetailsModal, setShowSupplyDetailsModal] = useState(false)
   const [selectedRequirementForSupply, setSelectedRequirementForSupply] = useState<any>(null)
 
-  // Add this near the top of the SRUApp component, after the state declarations
-  useEffect(() => {
-    // Check if we have user data in localStorage on component mount
-    const savedUser = localStorage.getItem("currentUser")
-    const isLoggedIn = localStorage.getItem("isLoggedIn")
-
-    if (savedUser && isLoggedIn === "true" && !user) {
-      const parsedUser = JSON.parse(savedUser)
-      login(parsedUser.email)
-    }
-  }, [])
-
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!user) {
+    if (!loading && !user) {
       router.push("/login")
     }
-  }, [user, router])
+  }, [user, loading, router])
 
   // Auto-update priority based on delivery dates
   useEffect(() => {
+    if (!userData.requirements?.length) return
+
     const updateUrgentRequirements = () => {
       const updatedRequirements = userData.requirements.map((req: any) => {
         // Only update if not already completed and not already urgent
@@ -91,11 +81,19 @@ export default function SRUApp() {
     return () => clearInterval(interval)
   }, [userData.requirements, updateUserData])
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
   if (!user) {
     return null // Will redirect to login
   }
 
-  const { requirements, pos, supplyHistory } = userData
+  const { requirements = [], pos = [], supplyHistory = [] } = userData
 
   const handleAddRequirement = (newRequirement: any) => {
     // Check if delivery is due soon and set priority accordingly
@@ -318,9 +316,13 @@ export default function SRUApp() {
     setActiveTab("requirements")
   }
 
-  const handleLogout = () => {
-    logout()
-    router.push("/login")
+  const handleLogout = async () => {
+    try {
+      await logout()
+      router.push("/login")
+    } catch (error) {
+      console.error("Error logging out:", error)
+    }
   }
 
   return (

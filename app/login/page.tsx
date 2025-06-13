@@ -6,28 +6,43 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AuthForm } from "@/components/auth-form"
 import { useAuth } from "@/contexts/auth-context"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useAuth()
+  const { login, signup, googleLogin, loading } = useAuth()
   const [activeTab, setActiveTab] = useState("login")
+  const [error, setError] = useState<string | null>(null)
 
-  const handleLogin = (email: string, password: string) => {
-    console.log("Login:", email, password)
-    login(email)
-    router.push("/")
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      setError(null)
+      await login(email, password)
+      router.push("/")
+    } catch (err: any) {
+      setError(err.message || "Failed to login. Please check your credentials.")
+    }
   }
 
-  const handleSignup = (email: string, password: string) => {
-    console.log("Signup:", email, password)
-    login(email)
-    router.push("/")
+  const handleSignup = async (email: string, password: string) => {
+    try {
+      setError(null)
+      await signup(email, password)
+      router.push("/")
+    } catch (err: any) {
+      setError(err.message || "Failed to create account. Please try again.")
+    }
   }
 
-  const handleGoogleLogin = () => {
-    console.log("Google login")
-    login("user@gmail.com")
-    router.push("/")
+  const handleGoogleLogin = async () => {
+    try {
+      setError(null)
+      await googleLogin()
+      router.push("/")
+    } catch (err: any) {
+      setError(err.message || "Failed to login with Google. Please try again.")
+    }
   }
 
   return (
@@ -48,11 +63,18 @@ export default function LoginPage() {
             </CardHeader>
 
             <CardContent className="space-y-4 pt-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
               <TabsContent value="login" className="mt-0">
-                <AuthForm type="login" onSubmit={handleLogin} onGoogleAuth={handleGoogleLogin} />
+                <AuthForm type="login" onSubmit={handleLogin} onGoogleAuth={handleGoogleLogin} isLoading={loading} />
               </TabsContent>
               <TabsContent value="signup" className="mt-0">
-                <AuthForm type="signup" onSubmit={handleSignup} onGoogleAuth={handleGoogleLogin} />
+                <AuthForm type="signup" onSubmit={handleSignup} onGoogleAuth={handleGoogleLogin} isLoading={loading} />
               </TabsContent>
             </CardContent>
 

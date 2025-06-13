@@ -12,15 +12,15 @@ interface AuthFormProps {
   type: "login" | "signup"
   onSubmit: (email: string, password: string) => void
   onGoogleAuth: () => void
+  isLoading?: boolean
 }
 
-export function AuthForm({ type, onSubmit, onGoogleAuth }: AuthFormProps) {
+export function AuthForm({ type, onSubmit, onGoogleAuth, isLoading = false }: AuthFormProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,13 +49,7 @@ export function AuthForm({ type, onSubmit, onGoogleAuth }: AuthFormProps) {
       return
     }
 
-    setIsLoading(true)
-
-    // Simulate API call
-    setTimeout(() => {
-      onSubmit(email, password)
-      setIsLoading(false)
-    }, 1000)
+    onSubmit(email, password)
   }
 
   return (
@@ -70,6 +64,7 @@ export function AuthForm({ type, onSubmit, onGoogleAuth }: AuthFormProps) {
           onChange={(e) => setEmail(e.target.value)}
           required
           className="h-11"
+          disabled={isLoading}
         />
       </div>
 
@@ -91,12 +86,14 @@ export function AuthForm({ type, onSubmit, onGoogleAuth }: AuthFormProps) {
             onChange={(e) => setPassword(e.target.value)}
             required
             className="h-11 pr-10"
+            disabled={isLoading}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
             tabIndex={-1}
+            disabled={isLoading}
           >
             {showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
           </button>
@@ -115,6 +112,7 @@ export function AuthForm({ type, onSubmit, onGoogleAuth }: AuthFormProps) {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               className="h-11 pr-10"
+              disabled={isLoading}
             />
           </div>
         </div>
@@ -149,6 +147,7 @@ export function AuthForm({ type, onSubmit, onGoogleAuth }: AuthFormProps) {
         variant="outline"
         className="w-full h-11 border-gray-300 hover:bg-gray-50 transition-all"
         onClick={onGoogleAuth}
+        disabled={isLoading}
       >
         <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
           <path
