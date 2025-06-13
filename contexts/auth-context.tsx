@@ -12,7 +12,6 @@ import {
 } from "firebase/auth"
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
-// Add import for data validator
 import { validateUserData } from "@/lib/data-validator"
 import { debugLog } from "@/lib/debug-logger"
 
@@ -47,6 +46,39 @@ const defaultUserData: UserData = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Helper function to remove File objects from data
+const removeFileObjects = (data: any): any => {
+  if (!data) return data
+
+  if (Array.isArray(data)) {
+    return data.map((item) => removeFileObjects(item))
+  }
+
+  if (typeof data === "object" && data !== null) {
+    if (data instanceof File) {
+      // Return a placeholder for File objects
+      return {
+        _fileMetadata: {
+          name: data.name,
+          type: data.type,
+          size: data.size,
+          lastModified: data.lastModified,
+        },
+      }
+    }
+
+    const result: Record<string, any> = {}
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        result[key] = removeFileObjects(data[key])
+      }
+    }
+    return result
+  }
+
+  return data
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [userData, setUserData] = useState<UserData>(defaultUserData)
@@ -79,7 +111,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // Fetch user data from Firestore
-  // Update the fetchUserData function to use validation
   const fetchUserData = async (uid: string) => {
     try {
       debugLog("Fetching user data for:", uid)
@@ -92,8 +123,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Validate and fix data structure if needed
         const validatedData = validateUserData(rawData)
-        setUserData(validatedData)
 
+        // Restore File objects from local storage if available
+        const localPOFiles = JSON.parse(localStorage.getItem(`poFiles_${uid}`) || "{}")
+
+        if (validatedData.pos && validatedData.pos.length > 0) {
+          validatedData.pos = validatedData.pos.map((po: any) => {
+            if (po._fileMetadata && localPOFiles[po.id]) {
+              // Try to restore the file from local storage
+              try {
+                const fileData = localPOFiles[po.id]
+                // We can't recreate the actual File object, but we can store the metadata
+                po.pdfFile = fileData
+              } catch (e) {
+                console.error("Failed to restore file from local storage", e)
+              }
+            }
+            return po
+          })
+        }
+
+        setUserData(validatedData)
         debugLog("User data set after validation:", validatedData)
       } else {
         debugLog("No user document found, creating new one")
@@ -196,8 +246,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return
 
     try {
+      // Update local state first
       const updatedData = { ...userData, ...newData }
       setUserData(updatedData)
+
+      // Store PDF files in local storage
+      if (newData.pos) {
+        const localPOFiles: Record<string, any> = JSON.parse(localStorage.getItem(`poFiles_${user.uid}`) || "{}")
+
+        newData.pos.forEach((po: any) => {
+          if (po.pdfFile instanceof File) {
+            // Store file metadata in local storage
+            localPOFiles[po.id] = {
+              name: po.pdfFile.name,
+              type: po.pdfFile.type,
+              size: po.pdfFile.size,
+              lastModified: po.pdfFile.lastModified,
+            }
+          }
+        })
+
+        localStorage.setItem(`poFiles_${user.uid}`, JSON.stringify(localPOFiles))
+      }
+
+      // Remove File objects before saving to Firestore
+      const cleanData = removeFileObjects(newData)
+      debugLog("Cleaned data for Firestore:", cleanData)
 
       const userDocRef = doc(db, "users", user.uid)
 
@@ -207,13 +281,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (docSnap.exists()) {
         // Update existing document
         await updateDoc(userDocRef, {
-          ...newData,
+          ...cleanData,
           lastUpdated: serverTimestamp(),
         })
       } else {
         // Create new document with all data
+        const cleanFullData = removeFileObjects(updatedData)
         await setDoc(userDocRef, {
-          ...updatedData,
+          ...cleanFullData,
           createdAt: serverTimestamp(),
           lastUpdated: serverTimestamp(),
         })

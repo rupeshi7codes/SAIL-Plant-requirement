@@ -70,8 +70,24 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
     }
   }
 
+  // Check if the pdfFile is a File object or metadata
+  const hasPdfFile = (po: any) => {
+    return po.pdfFile || (po._fileMetadata && po._fileMetadata.name)
+  }
+
+  // Get file name from either File object or metadata
+  const getFileName = (po: any) => {
+    if (po.pdfFile && po.pdfFile.name) {
+      return po.pdfFile.name
+    }
+    if (po._fileMetadata && po._fileMetadata.name) {
+      return po._fileMetadata.name
+    }
+    return "PO Document"
+  }
+
   const handleFileDownload = (pdfFile: File) => {
-    if (pdfFile) {
+    if (pdfFile && pdfFile instanceof File) {
       const url = URL.createObjectURL(pdfFile)
       const a = document.createElement("a")
       a.href = url
@@ -80,6 +96,8 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+    } else {
+      alert("PDF file is not available for download. It may need to be re-uploaded.")
     }
   }
 
@@ -152,18 +170,22 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
                           <p className="text-sm text-gray-600">{po.areaOfApplication}</p>
                           <div className="flex items-center gap-4 mt-2">
                             <span className="text-sm text-gray-600">{po.items.length} items</span>
-                            {po.pdfFile && (
+                            {hasPdfFile(po) && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  handleFileDownload(po.pdfFile)
+                                  if (po.pdfFile instanceof File) {
+                                    handleFileDownload(po.pdfFile)
+                                  } else {
+                                    alert("PDF file is not available for download. It may need to be re-uploaded.")
+                                  }
                                 }}
                                 className="flex items-center gap-2 h-7"
                               >
                                 <FileText className="h-3 w-3" />
-                                PDF
+                                {getFileName(po)}
                               </Button>
                             )}
                           </div>

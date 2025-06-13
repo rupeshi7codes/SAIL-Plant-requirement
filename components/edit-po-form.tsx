@@ -185,7 +185,9 @@ export default function EditPOForm({ po, onSubmit, onClose }: EditPOFormProps) {
                       <FileText className="h-8 w-8 text-red-600" />
                       <div>
                         <p className="font-medium">{pdfFile.name}</p>
-                        <p className="text-sm text-gray-600">{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <p className="text-sm text-gray-600">
+                          {pdfFile.size ? (pdfFile.size / 1024 / 1024).toFixed(2) + " MB" : "File size unavailable"}
+                        </p>
                       </div>
                     </div>
                     <div className="flex gap-2">
