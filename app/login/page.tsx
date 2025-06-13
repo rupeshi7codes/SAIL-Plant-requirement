@@ -6,57 +6,28 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AuthForm } from "@/components/auth-form"
 import { useAuth } from "@/contexts/auth-context"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, signup, googleLogin, loading } = useAuth()
+  const { login } = useAuth()
   const [activeTab, setActiveTab] = useState("login")
-  const [error, setError] = useState<string | null>(null)
-  // Add a loading state indicator
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
-  const handleLogin = async (email: string, password: string) => {
-    try {
-      setError(null)
-      setIsLoggingIn(true)
-      await login(email, password)
-      router.push("/")
-    } catch (err: any) {
-      console.error("Login error:", err)
-      setError(err.message || "Failed to login. Please check your credentials.")
-    } finally {
-      setIsLoggingIn(false)
-    }
+  const handleLogin = (email: string, password: string) => {
+    console.log("Login:", email, password)
+    login(email)
+    router.push("/")
   }
 
-  const handleSignup = async (email: string, password: string) => {
-    try {
-      setError(null)
-      setIsLoggingIn(true)
-      await signup(email, password)
-      router.push("/")
-    } catch (err: any) {
-      console.error("Signup error:", err)
-      setError(err.message || "Failed to create account. Please try again.")
-    } finally {
-      setIsLoggingIn(false)
-    }
+  const handleSignup = (email: string, password: string) => {
+    console.log("Signup:", email, password)
+    login(email)
+    router.push("/")
   }
 
-  const handleGoogleLogin = async () => {
-    try {
-      setError(null)
-      setIsLoggingIn(true)
-      await googleLogin()
-      router.push("/")
-    } catch (err: any) {
-      console.error("Google login error:", err)
-      setError(err.message || "Failed to login with Google. Please try again.")
-    } finally {
-      setIsLoggingIn(false)
-    }
+  const handleGoogleLogin = () => {
+    console.log("Google login")
+    login("user@gmail.com")
+    router.push("/")
   }
 
   return (
@@ -77,18 +48,11 @@ export default function LoginPage() {
             </CardHeader>
 
             <CardContent className="space-y-4 pt-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
               <TabsContent value="login" className="mt-0">
-                <AuthForm type="login" onSubmit={handleLogin} onGoogleAuth={handleGoogleLogin} isLoading={loading} />
+                <AuthForm type="login" onSubmit={handleLogin} onGoogleAuth={handleGoogleLogin} />
               </TabsContent>
               <TabsContent value="signup" className="mt-0">
-                <AuthForm type="signup" onSubmit={handleSignup} onGoogleAuth={handleGoogleLogin} isLoading={loading} />
+                <AuthForm type="signup" onSubmit={handleSignup} onGoogleAuth={handleGoogleLogin} />
               </TabsContent>
             </CardContent>
 

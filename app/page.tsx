@@ -29,12 +29,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-// Add import for debug logger
-import { debugLog } from "@/lib/debug-logger"
-
 export default function SRUApp() {
   const router = useRouter()
-  const { user, userData, logout, updateUserData, loading } = useAuth()
+  const { user, userData, logout, updateUserData, login } = useAuth()
   const [showForm, setShowForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
   const [editingRequirement, setEditingRequirement] = useState<any>(null)
@@ -44,21 +41,28 @@ export default function SRUApp() {
   const [activeTab, setActiveTab] = useState("dashboard")
   const [showSupplyDetailsModal, setShowSupplyDetailsModal] = useState(false)
   const [selectedRequirementForSupply, setSelectedRequirementForSupply] = useState<any>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
+
+  // Add this near the top of the SRUApp component, after the state declarations
+  useEffect(() => {
+    // Check if we have user data in localStorage on component mount
+    const savedUser = localStorage.getItem("currentUser")
+    const isLoggedIn = localStorage.getItem("isLoggedIn")
+
+    if (savedUser && isLoggedIn === "true" && !user) {
+      const parsedUser = JSON.parse(savedUser)
+      login(parsedUser.email)
+    }
+  }, [])
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!loading && !user) {
+    if (!user) {
       router.push("/login")
     }
-  }, [user, loading, router])
+  }, [user, router])
 
   // Auto-update priority based on delivery dates
   useEffect(() => {
-    if (!userData.requirements?.length) return
-
-    debugLog("Current user data:", userData)
-
     const updateUrgentRequirements = () => {
       const updatedRequirements = userData.requirements.map((req: any) => {
         // Only update if not already completed and not already urgent
@@ -76,9 +80,7 @@ export default function SRUApp() {
       )
 
       if (hasChanges) {
-        updateUserData({ requirements: updatedRequirements }).catch((error) => {
-          console.error("Failed to update urgent requirements:", error)
-        })
+        updateUserData({ requirements: updatedRequirements })
       }
     }
 
@@ -87,21 +89,13 @@ export default function SRUApp() {
     const interval = setInterval(updateUrgentRequirements, 60 * 60 * 1000) // 1 hour
 
     return () => clearInterval(interval)
-  }, [userData, updateUserData])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  }, [userData.requirements, updateUserData])
 
   if (!user) {
     return null // Will redirect to login
   }
 
-  const { requirements = [], pos = [], supplyHistory = [] } = userData
+  const { requirements, pos, supplyHistory } = userData
 
   const handleAddRequirement = (newRequirement: any) => {
     // Check if delivery is due soon and set priority accordingly
@@ -149,34 +143,18 @@ export default function SRUApp() {
     setShowSupplyDetailsModal(true)
   }
 
-  const handleAddPO = async (newPO: any) => {
-    try {
-      setIsProcessing(true)
-
-      const poId = `PO-${String(pos.length + 1).padStart(3, "0")}`
-
-      const po = {
-        ...newPO,
-        id: poId,
-        createdDate: new Date().toISOString().split("T")[0],
-        items: newPO.items.map((item: any) => ({
-          ...item,
-          balanceQty: item.quantity,
-        })),
-      }
-
-      debugLog("Adding new PO:", po)
-
-      // Make a copy of the current POs array to avoid reference issues
-      const updatedPOs = [...pos, po]
-      await updateUserData({ pos: updatedPOs })
-      setShowPOForm(false)
-    } catch (error) {
-      console.error("Failed to add PO:", error)
-      alert("Failed to add Purchase Order. Please try again.")
-    } finally {
-      setIsProcessing(false)
+  const handleAddPO = (newPO: any) => {
+    const po = {
+      ...newPO,
+      id: `PO-${String(pos.length + 1).padStart(3, "0")}`,
+      createdDate: new Date().toISOString().split("T")[0],
+      items: newPO.items.map((item: any) => ({
+        ...item,
+        balanceQty: item.quantity,
+      })),
     }
+    updateUserData({ pos: [...pos, po] })
+    setShowPOForm(false)
   }
 
   const handleEditPO = (po: any) => {
@@ -184,39 +162,16 @@ export default function SRUApp() {
     setShowEditPOForm(true)
   }
 
-  const handleUpdatePO = async (updatedPO: any) => {
-    try {
-      setIsProcessing(true)
-      const updatedPOs = pos.map((po) => (po.id === updatedPO.id ? updatedPO : po))
-      await updateUserData({ pos: updatedPOs })
-      setShowEditPOForm(false)
-      setEditingPO(null)
-    } catch (error) {
-      console.error("Failed to update PO:", error)
-      alert("Failed to update Purchase Order. Please try again.")
-    } finally {
-      setIsProcessing(false)
-    }
+  const handleUpdatePO = (updatedPO: any) => {
+    const updatedPOs = pos.map((po) => (po.id === updatedPO.id ? updatedPO : po))
+    updateUserData({ pos: updatedPOs })
+    setShowEditPOForm(false)
+    setEditingPO(null)
   }
 
-  const handleDeletePO = async (poId: string) => {
-    try {
-      setIsProcessing(true)
-      const poToDelete = pos.find((po) => po.id === poId)
-
-      // Delete the file from storage if it exists
-      if (poToDelete && poToDelete.filePath) {
-        // We'll handle file deletion in the updateUserData function
-      }
-
-      const updatedPOs = pos.filter((po) => po.id !== poId)
-      await updateUserData({ pos: updatedPOs })
-    } catch (error) {
-      console.error("Failed to delete PO:", error)
-      alert("Failed to delete Purchase Order. Please try again.")
-    } finally {
-      setIsProcessing(false)
-    }
+  const handleDeletePO = (poId: string) => {
+    const updatedPOs = pos.filter((po) => po.id !== poId)
+    updateUserData({ pos: updatedPOs })
   }
 
   const handleUpdatePOBalance = (poId: string, materialName: string, newBalance: number) => {
@@ -363,13 +318,9 @@ export default function SRUApp() {
     setActiveTab("requirements")
   }
 
-  const handleLogout = async () => {
-    try {
-      await logout()
-      router.push("/login")
-    } catch (error) {
-      console.error("Error logging out:", error)
-    }
+  const handleLogout = () => {
+    logout()
+    router.push("/login")
   }
 
   return (
@@ -383,16 +334,11 @@ export default function SRUApp() {
             </div>
             <div className="flex items-center gap-4">
               <div className="flex gap-3">
-                <Button
-                  onClick={() => setShowPOForm(true)}
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  disabled={isProcessing}
-                >
+                <Button onClick={() => setShowPOForm(true)} variant="outline" className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
                   New PO
                 </Button>
-                <Button onClick={() => setShowForm(true)} className="flex items-center gap-2" disabled={isProcessing}>
+                <Button onClick={() => setShowForm(true)} className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
                   New Requirement
                 </Button>
@@ -410,7 +356,6 @@ export default function SRUApp() {
                       variant="destructive"
                       size="sm"
                       className="flex items-center gap-2 bg-red-600 hover:bg-red-700"
-                      disabled={isProcessing}
                     >
                       <LogOut className="h-4 w-4" />
                       Logout

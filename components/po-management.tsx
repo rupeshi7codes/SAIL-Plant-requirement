@@ -70,21 +70,16 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
     }
   }
 
-  // Check if the PO has a file attached
-  const hasFile = (po: any) => {
-    return po.fileUrl || po.fileName
-  }
-
-  // Get file name from PO
-  const getFileName = (po: any) => {
-    return po.fileName || "PO Document"
-  }
-
-  const handleFileDownload = (po: any) => {
-    if (po.fileUrl) {
-      window.open(po.fileUrl, "_blank")
-    } else {
-      alert("PDF file is not available for download.")
+  const handleFileDownload = (pdfFile: File) => {
+    if (pdfFile) {
+      const url = URL.createObjectURL(pdfFile)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = pdfFile.name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     }
   }
 
@@ -157,18 +152,18 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
                           <p className="text-sm text-gray-600">{po.areaOfApplication}</p>
                           <div className="flex items-center gap-4 mt-2">
                             <span className="text-sm text-gray-600">{po.items.length} items</span>
-                            {hasFile(po) && (
+                            {po.pdfFile && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  handleFileDownload(po)
+                                  handleFileDownload(po.pdfFile)
                                 }}
                                 className="flex items-center gap-2 h-7"
                               >
                                 <FileText className="h-3 w-3" />
-                                {getFileName(po)}
+                                PDF
                               </Button>
                             )}
                           </div>
