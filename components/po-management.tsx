@@ -7,8 +7,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Package, Calendar, Edit, Check, X, Search, Trash2, FileText, ChevronDown, ChevronRight } from "lucide-react"
+import {
+  Package,
+  Calendar,
+  Edit,
+  Check,
+  X,
+  Search,
+  Trash2,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  Download,
+} from "lucide-react"
 import { formatDate } from "@/utils/dateFormat"
+import { StorageService } from "@/lib/storage"
 
 interface POManagementProps {
   pos: any[]
@@ -23,6 +36,7 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
   const [searchPO, setSearchPO] = useState("")
   const [filteredPOs, setFilteredPOs] = useState(pos)
   const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set())
+  const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null)
 
   const handleSearch = () => {
     if (searchPO.trim()) {
@@ -70,16 +84,23 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
     }
   }
 
-  const handleFileDownload = (pdfFile: File) => {
-    if (pdfFile) {
-      const url = URL.createObjectURL(pdfFile)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = pdfFile.name
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+  const handleFileDownload = async (po: any) => {
+    const pdfUrl = po.pdfFileUrl || po.pdf_file_url
+    const pdfName = po.pdfFileName || po.pdf_file_name
+
+    if (!pdfUrl || !pdfName) {
+      alert("No PDF file available for this PO")
+      return
+    }
+
+    try {
+      setDownloadingPDF(po.id)
+      await StorageService.downloadPDF(pdfUrl, pdfName)
+    } catch (error: any) {
+      console.error("Error downloading file:", error)
+      alert(`Error downloading file: ${error.message || "Unknown error"}`)
+    } finally {
+      setDownloadingPDF(null)
     }
   }
 
@@ -152,18 +173,20 @@ export default function POManagement({ pos, onUpdateBalance, onEditPO, onDeleteP
                           <p className="text-sm text-gray-600">{po.areaOfApplication}</p>
                           <div className="flex items-center gap-4 mt-2">
                             <span className="text-sm text-gray-600">{po.items.length} items</span>
-                            {po.pdfFile && (
+                            {(po.pdfFileUrl || po.pdf_file_url || po.pdfFileName || po.pdf_file_name) && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  handleFileDownload(po.pdfFile)
+                                  handleFileDownload(po)
                                 }}
+                                disabled={downloadingPDF === po.id}
                                 className="flex items-center gap-2 h-7"
                               >
                                 <FileText className="h-3 w-3" />
-                                PDF
+                                <Download className="h-3 w-3" />
+                                {downloadingPDF === po.id ? "Downloading..." : "PDF"}
                               </Button>
                             )}
                           </div>

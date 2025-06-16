@@ -21,12 +21,14 @@ export default function Dashboard({ requirements, getPriorityColor, getStatusIco
   const [expandedRecent, setExpandedRecent] = useState<Set<string>>(new Set())
 
   const urgentRequirements = requirements.filter((req) => req.priority === "Urgent" && req.status !== "Completed")
-  const totalRequirements = requirements.length
+  const activeRequirements = requirements.filter((req) => req.status !== "Completed")
+  const totalRequirements = activeRequirements.length
   const completedRequirements = requirements.filter((req) => req.status === "Completed").length
   const inProgressRequirements = requirements.filter((req) => req.status === "In Progress").length
   const pendingRequirements = requirements.filter((req) => req.status === "Pending").length
 
-  const completionRate = (completedRequirements / totalRequirements) * 100
+  const allRequirements = requirements.length
+  const completionRate = allRequirements > 0 ? (completedRequirements / allRequirements) * 100 : 0
 
   const toggleUrgentExpanded = (reqId: string) => {
     const newExpanded = new Set(expandedUrgent)
@@ -48,18 +50,53 @@ export default function Dashboard({ requirements, getPriorityColor, getStatusIco
     setExpandedRecent(newExpanded)
   }
 
+  // Helper function to get creation timestamp for proper sorting
+  const getCreationTimestamp = (req: any) => {
+    // Try to use created_at first (ISO string with time), then fall back to createdDate
+    if (req.created_at) {
+      return new Date(req.created_at).getTime()
+    } else if (req.createdDate) {
+      return new Date(req.createdDate).getTime()
+    } else {
+      // Fallback: extract timestamp from ID if it contains one
+      const idMatch = req.id?.match(/REQ-(\d+)-/)
+      if (idMatch) {
+        return Number.parseInt(idMatch[1])
+      }
+      return 0
+    }
+  }
+
+  // Helper function to format creation date and time
+  const formatCreationDateTime = (req: any) => {
+    if (req.created_at) {
+      const date = new Date(req.created_at)
+      return date.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+    } else if (req.createdDate) {
+      return formatDate(req.createdDate)
+    }
+    return "Unknown"
+  }
+
   return (
     <div className="space-y-6">
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onCardClick("total")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Requirements</CardTitle>
+            <CardTitle className="text-sm font-medium">Active Requirements</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalRequirements}</div>
-            <p className="text-xs text-muted-foreground">Active material requests</p>
+            <p className="text-xs text-muted-foreground">In Progress & Pending requests</p>
           </CardContent>
         </Card>
 
@@ -137,7 +174,7 @@ export default function Dashboard({ requirements, getPriorityColor, getStatusIco
                       <div className="text-right">
                         <p className="text-sm font-medium">Due: {formatDate(req.deliveryDate)}</p>
                         <p className="text-sm text-gray-600">
-                          {req.selectedItems.reduce((sum: number, item: any) => sum + item.quantitySupplied, 0)}/
+                          {req.selectedItems.reduce((sum: number, item: any) => sum + (item.quantitySupplied || 0), 0)}/
                           {req.selectedItems.reduce((sum: number, item: any) => sum + item.quantityRequired, 0)} total
                           units
                         </p>
@@ -153,12 +190,12 @@ export default function Dashboard({ requirements, getPriorityColor, getStatusIco
                               <div>
                                 <p className="font-medium text-sm">{item.materialName}</p>
                                 <p className="text-xs text-gray-600">
-                                  {item.quantitySupplied}/{item.quantityRequired} {item.unit}
+                                  {item.quantitySupplied || 0}/{item.quantityRequired} {item.unit}
                                 </p>
                               </div>
                               <div className="text-right">
                                 <Progress
-                                  value={(item.quantitySupplied / item.quantityRequired) * 100}
+                                  value={((item.quantitySupplied || 0) / item.quantityRequired) * 100}
                                   className="w-16 h-2"
                                 />
                               </div>
@@ -184,13 +221,18 @@ export default function Dashboard({ requirements, getPriorityColor, getStatusIco
       <Card>
         <CardHeader>
           <CardTitle>Recent Requirements</CardTitle>
-          <CardDescription>Latest material requirements by creation date</CardDescription>
+          <CardDescription>Latest 10 material requirements by creation date and time</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {requirements
-              .sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime())
-              .slice(0, 5)
+              .sort((a, b) => {
+                // Sort by creation timestamp (most recent first)
+                const timestampA = getCreationTimestamp(a)
+                const timestampB = getCreationTimestamp(b)
+                return timestampB - timestampA // Descending order (newest first)
+              })
+              .slice(0, 10) // Show only latest 10
               .map((req) => {
                 const isExpanded = expandedRecent.has(req.id)
                 return (
@@ -212,7 +254,7 @@ export default function Dashboard({ requirements, getPriorityColor, getStatusIco
                           <p className="text-sm text-gray-600">
                             {req.areaOfApplication} - {req.selectedItems.length} items
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">Created: {formatDate(req.createdDate)}</p>
+                          <p className="text-xs text-gray-500 mt-1">Created: {formatCreationDateTime(req)}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
@@ -236,12 +278,12 @@ export default function Dashboard({ requirements, getPriorityColor, getStatusIco
                               <div>
                                 <p className="font-medium text-sm">{item.materialName}</p>
                                 <p className="text-xs text-gray-600">
-                                  {item.quantitySupplied}/{item.quantityRequired} {item.unit}
+                                  {item.quantitySupplied || 0}/{item.quantityRequired} {item.unit}
                                 </p>
                               </div>
                               <div className="text-right">
                                 <Progress
-                                  value={(item.quantitySupplied / item.quantityRequired) * 100}
+                                  value={((item.quantitySupplied || 0) / item.quantityRequired) * 100}
                                   className="w-16 h-2"
                                 />
                               </div>
