@@ -1,0 +1,1 @@
+Refractory Material Tracking Web Application is developed to streamline the requirement communication between Steel Plants (User Departments) and SRU (Suppliers), improving traceability and efficiency.
