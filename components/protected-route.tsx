@@ -12,26 +12,15 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, loading } = useAuth()
+  const { user } = useAuth()
 
   useEffect(() => {
-    if (!loading) {
-      if (!user && pathname !== "/login") {
-        router.push("/login")
-      } else if (user && pathname === "/login") {
-        router.push("/")
-      }
+    if (!user && pathname !== "/login") {
+      router.push("/login")
+    } else if (user && pathname === "/login") {
+      router.push("/")
     }
-  }, [user, loading, pathname, router])
-
-  // Show loading state while checking authentication
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  }, [user, pathname, router])
 
   // Show login page if not authenticated and on login route
   if (!user && pathname === "/login") {

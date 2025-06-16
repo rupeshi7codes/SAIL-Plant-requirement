@@ -8,9 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, Plus, Trash2, Upload, FileText, Download, Loader2 } from "lucide-react"
-import { StorageService } from "@/lib/storage"
-import { useAuth } from "@/contexts/auth-context"
+import { X, Plus, Trash2, Upload, FileText, Download } from "lucide-react"
 
 interface POFormProps {
   onSubmit: (po: any) => void
@@ -18,7 +16,6 @@ interface POFormProps {
 }
 
 export default function POForm({ onSubmit, onClose }: POFormProps) {
-  const { user } = useAuth()
   const [formData, setFormData] = useState({
     poNumber: "",
     poDate: "",
@@ -26,61 +23,24 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
     items: [{ materialName: "", quantity: "", unit: "pcs" }],
   })
   const [pdfFile, setPdfFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!user) {
-      alert("You must be logged in to create a PO")
-      return
-    }
-
     const validItems = formData.items.filter((item) => item.materialName && item.quantity)
     if (validItems.length === 0) {
       alert("Please add at least one item with material name and quantity")
       return
     }
 
-    try {
-      setUploading(true)
-
-      let pdfFileUrl = null
-      let pdfFileName = null
-
-      // Upload PDF if provided
-      if (pdfFile) {
-        try {
-          const poId = `PO-${Date.now()}`
-          // Use user.id instead of user.uid for Supabase
-          const uploadResult = await StorageService.uploadPDF(pdfFile, user.id, poId)
-          pdfFileUrl = uploadResult.path
-          pdfFileName = pdfFile.name
-          console.log("PDF uploaded successfully:", uploadResult)
-        } catch (error) {
-          console.error("PDF upload failed:", error)
-          alert("PDF upload failed, but PO will be created without the document.")
-        }
-      }
-
-      const poData = {
-        ...formData,
-        items: validItems.map((item) => ({
-          ...item,
-          quantity: Number.parseInt(item.quantity),
-        })),
-        pdfFileUrl,
-        pdfFileName,
-      }
-
-      onSubmit(poData)
-    } catch (error) {
-      console.error("Error creating PO:", error)
-      alert("Error creating PO. Please try again.")
-    } finally {
-      setUploading(false)
-    }
+    onSubmit({
+      ...formData,
+      items: validItems.map((item) => ({
+        ...item,
+        quantity: Number.parseInt(item.quantity),
+      })),
+      pdfFile: pdfFile,
+    })
   }
 
   const addItem = () => {
@@ -105,10 +65,6 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file && file.type === "application/pdf") {
-      if (file.size > 10 * 1024 * 1024) {
-        alert("File size must be less than 10MB")
-        return
-      }
       setPdfFile(file)
     } else {
       alert("Please select a PDF file")
@@ -137,25 +93,6 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
 
   const units = ["pcs", "kgs", "set"]
 
-  // Show login message if no user
-  if (!user) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Authentication Required</CardTitle>
-            <CardDescription>You must be logged in to create a purchase order.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={onClose} className="w-full">
-              Close
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -164,7 +101,7 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
             <CardTitle>Create New Purchase Order</CardTitle>
             <CardDescription>Add a new PO with multiple material items</CardDescription>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} disabled={uploading}>
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
@@ -179,7 +116,6 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                   onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
                   placeholder="PO-2024-XXX"
                   required
-                  disabled={uploading}
                 />
               </div>
 
@@ -191,7 +127,6 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                   value={formData.poDate}
                   onChange={(e) => setFormData({ ...formData, poDate: e.target.value })}
                   required
-                  disabled={uploading}
                 />
               </div>
 
@@ -203,7 +138,6 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                   onChange={(e) => setFormData({ ...formData, areaOfApplication: e.target.value })}
                   placeholder="e.g., Blast Furnace - Hearth Lining"
                   required
-                  disabled={uploading}
                 />
               </div>
             </div>
@@ -221,13 +155,19 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                         variant="outline"
                         onClick={() => fileInputRef.current?.click()}
                         className="flex items-center gap-2"
-                        disabled={uploading}
                       >
                         <Upload className="h-4 w-4" />
                         Upload PO PDF
                       </Button>
-                      <p className="mt-2 text-sm text-gray-600">Upload the original PO document (PDF only, max 10MB)</p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
                     </div>
+                    <p className="mt-2 text-sm text-gray-600">Upload the original PO document (PDF only)</p>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded">
@@ -239,37 +179,22 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleFileDownload}
-                        disabled={uploading}
-                      >
+                      <Button type="button" variant="outline" size="sm" onClick={handleFileDownload}>
                         <Download className="h-4 w-4" />
                       </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={handleFileRemove} disabled={uploading}>
+                      <Button type="button" variant="outline" size="sm" onClick={handleFileRemove}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
                 )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  disabled={uploading}
-                />
               </div>
             </div>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-lg font-medium">PO Items</Label>
-                <Button type="button" onClick={addItem} variant="outline" size="sm" disabled={uploading}>
+                <Button type="button" onClick={addItem} variant="outline" size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Item
                 </Button>
@@ -286,7 +211,6 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                           onChange={(e) => updateItem(index, "materialName", e.target.value)}
                           placeholder="Enter custom material name"
                           required
-                          disabled={uploading}
                         />
                       </div>
 
@@ -298,17 +222,12 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                           onChange={(e) => updateItem(index, "quantity", e.target.value)}
                           placeholder="Enter quantity"
                           required
-                          disabled={uploading}
                         />
                       </div>
 
                       <div className="space-y-2">
                         <Label>Unit *</Label>
-                        <Select
-                          value={item.unit}
-                          onValueChange={(value) => updateItem(index, "unit", value)}
-                          disabled={uploading}
-                        >
+                        <Select value={item.unit} onValueChange={(value) => updateItem(index, "unit", value)}>
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -330,7 +249,6 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
                             size="sm"
                             onClick={() => removeItem(index)}
                             className="text-red-600 hover:text-red-700"
-                            disabled={uploading}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -343,19 +261,10 @@ export default function POForm({ onSubmit, onClose }: POFormProps) {
             </div>
 
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={onClose} disabled={uploading}>
+              <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={uploading}>
-                {uploading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating PO...
-                  </>
-                ) : (
-                  "Create PO"
-                )}
-              </Button>
+              <Button type="submit">Create PO</Button>
             </div>
           </form>
         </CardContent>

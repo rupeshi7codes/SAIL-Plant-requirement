@@ -6,40 +6,35 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AuthForm } from "@/components/auth-form"
 import { useAuth } from "@/contexts/auth-context"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, signup, loading } = useAuth()
+  const { login } = useAuth()
   const [activeTab, setActiveTab] = useState("login")
-  const [error, setError] = useState<string | null>(null)
 
-  const handleLogin = async (email: string, password: string) => {
-    try {
-      setError(null)
-      await login(email, password)
-      router.push("/")
-    } catch (err: any) {
-      setError(err.message || "Failed to login. Please check your credentials.")
-    }
+  const handleLogin = (email: string, password: string) => {
+    console.log("Login:", email, password)
+    login(email)
+    router.push("/")
   }
 
-  const handleSignup = async (email: string, password: string) => {
-    try {
-      setError(null)
-      await signup(email, password)
-      router.push("/")
-    } catch (err: any) {
-      setError(err.message || "Failed to create account. Please try again.")
-    }
+  const handleSignup = (email: string, password: string) => {
+    console.log("Signup:", email, password)
+    login(email)
+    router.push("/")
+  }
+
+  const handleGoogleLogin = () => {
+    console.log("Google login")
+    login("user@gmail.com")
+    router.push("/")
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900"> Material Requirement Tracker</h1>
+          <h1 className="text-3xl font-bold text-gray-900">SRU Material Management</h1>
           <p className="text-gray-600 mt-2">Durgapur Steel Plant</p>
         </div>
 
@@ -53,18 +48,11 @@ export default function LoginPage() {
             </CardHeader>
 
             <CardContent className="space-y-4 pt-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
               <TabsContent value="login" className="mt-0">
-                <AuthForm type="login" onSubmit={handleLogin} isLoading={loading} />
+                <AuthForm type="login" onSubmit={handleLogin} onGoogleAuth={handleGoogleLogin} />
               </TabsContent>
               <TabsContent value="signup" className="mt-0">
-                <AuthForm type="signup" onSubmit={handleSignup} isLoading={loading} />
+                <AuthForm type="signup" onSubmit={handleSignup} onGoogleAuth={handleGoogleLogin} />
               </TabsContent>
             </CardContent>
 

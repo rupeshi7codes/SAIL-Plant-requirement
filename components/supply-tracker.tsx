@@ -14,7 +14,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import type { JSX } from "react/jsx-runtime"
 import { formatDate } from "@/utils/dateFormat"
-import { supabase } from "@/lib/supabase"
 
 interface SupplyTrackerProps {
   requirements: any[]
@@ -100,21 +99,11 @@ export default function SupplyTracker({
     setEditHistoryData({})
   }
 
-  const handleDeleteHistory = async (historyId: string) => {
+  const handleDeleteHistory = (historyId: string) => {
     if (window.confirm("Are you sure you want to delete this supply entry?")) {
-      try {
-        // Delete from database first
-        const { error } = await supabase.from("supply_history").delete().eq("id", historyId)
-        if (error) throw error
-
-        // Update local state
-        const updatedHistory = supplyHistory.filter((entry) => entry.id !== historyId)
-        onUpdateSupplyHistory(updatedHistory)
-        setSelectedReqHistory(selectedReqHistory.filter((entry) => entry.id !== historyId))
-      } catch (error) {
-        console.error("Error deleting supply history entry:", error)
-        alert("Error deleting supply entry. Please try again.")
-      }
+      const updatedHistory = supplyHistory.filter((entry) => entry.id !== historyId)
+      onUpdateSupplyHistory(updatedHistory)
+      setSelectedReqHistory(selectedReqHistory.filter((entry) => entry.id !== historyId))
     }
   }
 

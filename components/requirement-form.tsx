@@ -10,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { X, AlertTriangle } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { X } from "lucide-react"
 
 interface RequirementFormProps {
   pos: any[]
@@ -29,58 +28,19 @@ export default function RequirementForm({ pos, onSubmit, onClose }: RequirementF
 
   const [selectedPO, setSelectedPO] = useState<any>(null)
   const [selectedItems, setSelectedItems] = useState<any[]>([])
-  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({})
 
   useEffect(() => {
     if (formData.poNumber) {
       const po = pos.find((p) => p.poNumber === formData.poNumber)
       setSelectedPO(po)
       setSelectedItems([])
-      setValidationErrors({})
     }
   }, [formData.poNumber, pos])
 
-  const validateQuantity = (materialName: string, requestedQuantity: number): string | null => {
-    if (!selectedPO) return null
-
-    const item = selectedPO.items.find((item: any) => item.materialName === materialName)
-    if (!item) return "Item not found"
-
-    const availableQty = item.balanceQty || 0
-
-    if (requestedQuantity <= 0) {
-      return "Quantity must be greater than 0"
-    }
-
-    if (requestedQuantity > availableQty) {
-      return `Cannot exceed available quantity (${availableQty} ${item.unit})`
-    }
-
-    return null
-  }
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-
     if (selectedItems.length === 0) {
       alert("Please select at least one item from the PO")
-      return
-    }
-
-    // Validate all selected items
-    const errors: { [key: string]: string } = {}
-    let hasErrors = false
-
-    selectedItems.forEach((item) => {
-      const error = validateQuantity(item.materialName, item.quantityRequired)
-      if (error) {
-        errors[item.materialName] = error
-        hasErrors = true
-      }
-    })
-
-    if (hasErrors) {
-      setValidationErrors(errors)
       return
     }
 
@@ -98,54 +58,18 @@ export default function RequirementForm({ pos, onSubmit, onClose }: RequirementF
 
   const handleItemSelection = (item: any, checked: boolean) => {
     if (checked) {
-      const availableQty = item.balanceQty || 0
-      if (availableQty <= 0) {
-        alert(`No stock available for ${item.materialName}`)
-        return
-      }
-
-      setSelectedItems([
-        ...selectedItems,
-        {
-          ...item,
-          quantityRequired: Math.min(1, availableQty),
-          availableQty: availableQty,
-        },
-      ])
+      setSelectedItems([...selectedItems, { ...item, quantityRequired: item.quantity }])
     } else {
       setSelectedItems(selectedItems.filter((selected) => selected.materialName !== item.materialName))
-      // Clear validation error for this item
-      const newErrors = { ...validationErrors }
-      delete newErrors[item.materialName]
-      setValidationErrors(newErrors)
     }
   }
 
   const updateItemQuantity = (materialName: string, quantity: number) => {
-    const updatedItems = selectedItems.map((item) =>
-      item.materialName === materialName ? { ...item, quantityRequired: quantity } : item,
+    setSelectedItems(
+      selectedItems.map((item) =>
+        item.materialName === materialName ? { ...item, quantityRequired: quantity } : item,
+      ),
     )
-    setSelectedItems(updatedItems)
-
-    // Validate the updated quantity
-    const error = validateQuantity(materialName, quantity)
-    const newErrors = { ...validationErrors }
-
-    if (error) {
-      newErrors[materialName] = error
-    } else {
-      delete newErrors[materialName]
-    }
-
-    setValidationErrors(newErrors)
-  }
-
-  const getAvailableQuantity = (item: any): number => {
-    return item.balanceQty || 0
-  }
-
-  const isItemAvailable = (item: any): boolean => {
-    return getAvailableQuantity(item) > 0
   }
 
   return (
@@ -188,72 +112,39 @@ export default function RequirementForm({ pos, onSubmit, onClose }: RequirementF
                   {selectedPO.items.map((item: any, index: number) => {
                     const isSelected = selectedItems.some((selected) => selected.materialName === item.materialName)
                     const selectedItem = selectedItems.find((selected) => selected.materialName === item.materialName)
-                    const availableQty = getAvailableQuantity(item)
-                    const isAvailable = isItemAvailable(item)
-                    const hasError = validationErrors[item.materialName]
 
                     return (
-                      <div key={index} className={`p-3 bg-white rounded border ${!isAvailable ? "opacity-60" : ""}`}>
-                        <div className="flex items-center space-x-4">
-                          <Checkbox
-                            checked={isSelected}
-                            disabled={!isAvailable}
-                            onCheckedChange={(checked) => handleItemSelection(item, checked as boolean)}
-                          />
-                          <div className="flex-1">
-                            <p className="font-medium">{item.materialName}</p>
-                            <div className="flex items-center gap-4 text-sm">
-                              <span className={`${isAvailable ? "text-green-600" : "text-red-600"}`}>
-                                Available: {availableQty} {item.unit}
-                              </span>
-                              <span className="text-gray-600">
-                                Total PO Qty: {item.quantity} {item.unit}
-                              </span>
-                            </div>
-                            {!isAvailable && (
-                              <p className="text-red-500 text-sm mt-1">
-                                <AlertTriangle className="h-3 w-3 inline mr-1" />
-                                No stock available
-                              </p>
-                            )}
-                          </div>
-                          {isSelected && (
-                            <div className="flex items-center space-x-2">
-                              <Label className="text-sm">Required:</Label>
-                              <Input
-                                type="number"
-                                value={selectedItem?.quantityRequired || ""}
-                                onChange={(e) =>
-                                  updateItemQuantity(item.materialName, Number.parseInt(e.target.value) || 0)
-                                }
-                                className={`w-24 ${hasError ? "border-red-500" : ""}`}
-                                max={availableQty}
-                                min={1}
-                                step={1}
-                              />
-                              <span className="text-sm text-gray-600">{item.unit}</span>
-                            </div>
-                          )}
+                      <div key={index} className="flex items-center space-x-4 p-3 bg-white rounded border">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) => handleItemSelection(item, checked as boolean)}
+                        />
+                        <div className="flex-1">
+                          <p className="font-medium">{item.materialName}</p>
+                          <p className="text-sm text-gray-600">
+                            Available: {item.quantity} {item.unit}
+                          </p>
                         </div>
-                        {isSelected && hasError && (
-                          <Alert className="mt-2 border-red-200 bg-red-50">
-                            <AlertTriangle className="h-4 w-4 text-red-600" />
-                            <AlertDescription className="text-red-700">{hasError}</AlertDescription>
-                          </Alert>
+                        {isSelected && (
+                          <div className="flex items-center space-x-2">
+                            <Label className="text-sm">Required:</Label>
+                            <Input
+                              type="number"
+                              value={selectedItem?.quantityRequired || ""}
+                              onChange={(e) =>
+                                updateItemQuantity(item.materialName, Number.parseInt(e.target.value) || 0)
+                              }
+                              className="w-24"
+                              max={item.quantity}
+                              min={1}
+                            />
+                            <span className="text-sm text-gray-600">{item.unit}</span>
+                          </div>
                         )}
                       </div>
                     )
                   })}
                 </div>
-
-                {selectedPO.items.every((item: any) => !isItemAvailable(item)) && (
-                  <Alert className="mt-4 border-orange-200 bg-orange-50">
-                    <AlertTriangle className="h-4 w-4 text-orange-600" />
-                    <AlertDescription className="text-orange-700">
-                      No items are available in this PO. All items have zero balance quantity.
-                    </AlertDescription>
-                  </Alert>
-                )}
               </Card>
             )}
 
@@ -303,10 +194,7 @@ export default function RequirementForm({ pos, onSubmit, onClose }: RequirementF
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={!selectedPO || selectedItems.length === 0 || Object.keys(validationErrors).length > 0}
-              >
+              <Button type="submit" disabled={!selectedPO || selectedItems.length === 0}>
                 Submit Requirement
               </Button>
             </div>
